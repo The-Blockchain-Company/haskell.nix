@@ -82,7 +82,7 @@ let
             + " this has been deprecated in favour of `compiler-nix-name`. "
             + "Using `ghc` will break cross compilation setups, as haskell.nix cannot "
             + "pick the correct `ghc` package from the respective buildPackages. "
-            + "For example, use `compiler-nix-name = \"ghc865\";` for GHC 8.6.5.") ghc
+              compiler-nix-name = \"ghc8104\";
           else
               # Do note that `pkgs = final.buildPackages` in the `overlays/haskell.nix`
               # call to this file. And thus `pkgs` here is the proper `buildPackages`
