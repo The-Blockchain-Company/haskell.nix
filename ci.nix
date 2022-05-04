@@ -33,7 +33,7 @@
     } // nixpkgs.lib.optionalAttrs (nixpkgsName == "unstable") {
       ghc865 = false;
       ghc884 = false; # Native version is used to boot 9.0.1
-      ghc8104 = false;
+      ghc8104 = true;
       ghc8105 = false;
       ghc8106 = false;
       ghc8107 = true;
@@ -41,7 +41,7 @@
       ghc902 = true;
       ghc921 = false;
       ghc922 = true;
-      ghc810420210212 = false;
+      ghc810420210212 = true;
     });
   systems = nixpkgsName: nixpkgs: compiler-nix-name: nixpkgs.lib.genAttrs (
     nixpkgs.lib.filter (v: v != "aarch64-darwin" || (
@@ -52,13 +52,13 @@
     # We need to use the actual nixpkgs version we're working with here, since the values
     # of 'lib.systems.examples' are not understood between all versions
     let lib = nixpkgs.lib;
-    in lib.optionalAttrs (nixpkgsName == "unstable" && (__elem compiler-nix-name ["ghc8107"]) && system != "aarch64-darwin") {
+    in lib.optionalAttrs (nixpkgsName == "unstable" && (__elem compiler-nix-name ["ghc8104"]) && system != "aarch64-darwin") {
     inherit (lib.systems.examples) ghcjs;
   } // lib.optionalAttrs (system == "x86_64-linux" &&
          nixpkgsName == "unstable" && (__elem compiler-nix-name ["ghc8107"])) {
     # Windows cross compilation is currently broken on macOS
     inherit (lib.systems.examples) mingwW64;
-  } // lib.optionalAttrs (system == "x86_64-linux" && nixpkgsName == "unstable" && compiler-nix-name == "ghc8107") {
+  } // lib.optionalAttrs (system == "x86_64-linux" && nixpkgsName == "unstable" && compiler-nix-name == "ghc8104") {
     # Musl cross only works on linux
     # aarch64 cross only works on linux
     inherit (lib.systems.examples) musl64 aarch64-multiplatform;
