@@ -242,8 +242,8 @@ in hlint
 
 Running when no building is needed is still slow in restricted evaluation mode.
 
-```
-$ time nix-build --option restrict-eval true -I . --option allowed-uris "https://github.com/NixOS https://github.com/The-Blockchain-Company" hlint.nix -A components.exes.hlint --show-trace
+```shell
+$ time nix-build --option restrict-eval true -I . --option allowed-uris "https://github.com/NixOS https://github.com/the-blockchain-company" hlint.nix -A components.exes.hlint --show-trace
 /nix/store/2ybrfmcp79gg75ad4pr1cbxjak70yg8b-hlint-exe-hlint-2.2.11
 
 real	0m4.463s

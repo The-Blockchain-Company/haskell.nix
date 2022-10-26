@@ -45,7 +45,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
       identifier = { name = "test-haddock"; version = "0.1.0.0"; };
       license = "NONE";
       copyright = "";
-      maintainer = "rodney.lorrimar@tbco.io";
+      maintainer:          rmourey_jr@blockchain-company.io;
       author = "Rodney Lorrimar";
       homepage = "";
       url = "";

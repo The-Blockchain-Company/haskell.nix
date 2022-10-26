@@ -6,15 +6,17 @@
     nixpkgs-2003 = { url = "github:NixOS/nixpkgs/nixpkgs-20.03-darwin"; };
     nixpkgs-2105 = { url = "github:NixOS/nixpkgs/nixpkgs-21.05-darwin"; };
     nixpkgs-2111 = { url = "github:NixOS/nixpkgs/nixpkgs-21.11-darwin"; };
+    nixpkgs-2205 = { url = "github:NixOS/nixpkgs/nixpkgs-22.05-darwin"; };
     nixpkgs-unstable = { url = "github:NixOS/nixpkgs/nixpkgs-unstable"; };
+    flake-compat = { url = "github:the-blockchain-company/flake-compat"; flake = false; };
     flake-utils = { url = "github:numtide/flake-utils"; };
     hydra.url = "hydra";
     hackage = {
-      url = "github:The-Blockchain-Company/hackage.nix";
+      url = "github:the-blockchain-company/hackage.nix";
       flake = false;
     };
     stackage = {
-      url = "github:The-Blockchain-Company/stackage.nix";
+      url = "github:the-blockchain-company/stackage.nix";
       flake = false;
     };
     cabal-32 = {
@@ -30,22 +32,18 @@
       flake = false;
     };
     bcc-shell = {
-      url = "github:The-Blockchain-Company/bcc-shell";
+      url = "github:the-blockchain-company/bcc-shell";
       flake = false;
     };
     "ghc-8.6.5-tbco" = {
       type = "github";
-      owner = "The-Blockchain-Company";
+      owner = "the-blockchain-company";
       repo = "ghc";
       ref = "release/8.6.5-tbco";
       flake = false;
     };
     hpc-coveralls = {
       url = "github:sevanspowell/hpc-coveralls";
-      flake = false;
-    };
-    nix-tools = {
-      url = "github:The-Blockchain-Company/nix-tools";
       flake = false;
     };
     old-ghc-nix = {
@@ -58,8 +56,8 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-2105, flake-utils, ... }@inputs:
-    let compiler = "ghc884";
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-2105, nixpkgs-2111, nixpkgs-2205, flake-utils, ... }@inputs:
+    let compiler = "ghc924";
       config = import ./config.nix;
     in {
       inherit config;
@@ -100,6 +98,12 @@
             };
             pkgs = import nixpkgs
               (nixpkgsArgs // { localSystem = { inherit system; }; });
+            pkgs-2105 = import nixpkgs-2105
+              (nixpkgsArgs // { localSystem = { inherit system; }; });
+            pkgs-2111 = import nixpkgs-2111
+              (nixpkgsArgs // { localSystem = { inherit system; }; });
+            pkgs-2205 = import nixpkgs-2205
+              (nixpkgsArgs // { localSystem = { inherit system; }; });
             pkgs-unstable = import nixpkgs-unstable
               (nixpkgsArgs // { localSystem = { inherit system; }; });
             hix = import ./hix/default.nix { inherit pkgs; };
@@ -111,7 +115,7 @@
       # supported by haskell.nix, e.g. with remote builders, in order to check this flake.
       # If you want to run the tests for just your platform, run `./test/tests.sh` or
       # `nix-build -A checks.$PLATFORM`
-    } // flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ] (system: {
+    } // flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ] (system: rec {
       legacyPackages = (self.internal.compat { inherit system; }).pkgs;
       legacyPackagesUnstable = (self.internal.compat { inherit system; }).pkgs-unstable;
 
@@ -125,15 +129,45 @@
         compiler-nix-name = compiler;
         pkgs = haskellNix.pkgs;
       })));
+      # Exposed so that buildkite can check that `allow-import-from-derivation=false` works for core of haskell.nix
+      roots = legacyPackagesUnstable.haskell-nix.roots compiler;
 
-      devShell = with self.legacyPackages.${system};
-        mkShell {
-          buildInputs = [
-            nixUnstable
-            cabal-install
-            haskell-nix.compiler.${compiler}
-            haskell-nix.nix-tools.${compiler}
-          ];
-        };
+      packages = ((self.internal.compat { inherit system; }).hix).apps;
+
+      devShells = with self.legacyPackages.${system}; {
+        default =
+          mkShell {
+            buildInputs = [
+              nixUnstable
+              cabal-install
+              haskell-nix.compiler.${compiler}
+            ];
+          };
+      } // __mapAttrs (compiler-nix-name: compiler:
+          mkShell {
+            buildInputs = [
+              compiler
+              haskell-nix.cabal-install.${compiler-nix-name}
+            ];
+          }
+      ) (
+        # Exclude old versions of GHC to speed up `nix flake check`
+        builtins.removeAttrs haskell-nix.compiler
+          [ "ghc844"
+            "ghc861" "ghc862" "ghc863" "ghc864"
+            "ghc881" "ghc882" "ghc883"
+            "ghc8101" "ghc8102" "ghc8103" "ghc8104" "ghc8105" "ghc8106" "ghc810420210212"
+            "ghc901"
+            "ghc921" "ghc922" "ghc923"]);
     });
+
+  # --- Flake Local Nix Configuration ----------------------------
+  nixConfig = {
+    # This sets the flake to use the IOG nix cache.
+    # Nix should ask for permission before using it,
+    # but remove it here if you do not want it to.
+    extra-substituters = ["https://cache.iog.io"];
+    extra-trusted-public-keys = ["hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
+    allow-import-from-derivation = "true";
+  };
 }

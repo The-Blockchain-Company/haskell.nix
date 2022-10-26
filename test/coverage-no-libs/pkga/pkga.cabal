@@ -9,7 +9,7 @@ version:             0.1.0.0
 -- bug-reports:
 license:             LicenseRef-PublicDomain
 author:              Samuel Evans-Powell
-maintainer:          samuel.evans-powell@tbco.io
+maintainer:          samuel.evans-powell@maintainer:          rmourey_jr@blockchain-company.io
 category:            Testing
 
 executable pkga-exe

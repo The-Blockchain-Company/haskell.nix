@@ -1,27 +1,11 @@
-{ stdenv, lib, mkCabalProjectPkgSet, cabalProject', haskellLib, util, recurseIntoAttrs, testSrc, compiler-nix-name }:
+{ stdenv, lib, mkCabalProjectPkgSet, cabalProject', haskellLib, util, recurseIntoAttrs, testSrc, compiler-nix-name, evalPackages }:
 
 with lib;
 
 let
   project = cabalProject' {
-    inherit compiler-nix-name;
+    inherit compiler-nix-name evalPackages;
     src = testSrc "cabal-22";
-    modules = [(lib.optionalAttrs (__elem compiler-nix-name ["ghc902" "ghc921" "ghc922"]) {
-      nonReinstallablePkgs = [
-        "rts" "ghc-heap" "ghc-prim" "integer-gmp" "integer-simple" "base"
-        "deepseq" "array" "ghc-boot-th" "pretty" "template-haskell"
-        # ghcjs custom packages
-        "ghcjs-prim" "ghcjs-th"
-        "ghc-bignum" "exceptions" "stm"
-        "ghc-boot"
-        "ghc" "Cabal" "Win32" "array" "binary" "bytestring" "containers"
-        "directory" "filepath" "ghc-boot" "ghc-compact" "ghc-prim"
-        # "ghci" "haskeline"
-        "hpc"
-        "mtl" "parsec" "process" "text" "time" "transformers"
-        "unix" "xhtml" "terminfo"
-      ];
-    })];
   };
 
   packages = project.hsPkgs;
@@ -29,9 +13,9 @@ let
 in recurseIntoAttrs {
   # When using ghcjs on darwin this test fails with
   # ReferenceError: h$hs_clock_darwin_gettime is not defined
-  # https://github.com/The-Blockchain-Company/haskell.nix/issues/925
+  # https://github.com/the-blockchain-company/haskell.nix/issues/925
   # Also `hspec` now depends on `ghc`, which breaks this test for cross compilation
-  meta.disabled = stdenv.hostPlatform.isGhcjs || stdenv.hostPlatform.isWindows;
+  meta.disabled = stdenv.hostPlatform.isGhcjs || stdenv.hostPlatform.isWindows || stdenv.hostPlatform.isMusl;
   ifdInputs = {
     inherit (project) plan-nix;
   };

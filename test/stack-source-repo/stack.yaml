@@ -4,7 +4,7 @@ packages:
 - .
 
 extra-deps:
-- git: https://github.com/The-Blockchain-Company/haskell.nix.git
+- git: https://github.com/the-blockchain-company/haskell.nix.git
   commit: bc01ebc05a8105035c9449943046b46c8364b932
   subdirs:
     - test/cabal-simple

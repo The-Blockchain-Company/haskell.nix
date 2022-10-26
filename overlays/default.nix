@@ -6,7 +6,6 @@ let
     #ghcjs = import ./ghcjs-asterius-triple.nix;
     #python = import ./python.nix;
     haskell = import ./haskell.nix args;
-    hackage-quirks = import ./hackage-quirks.nix;
     bootstrap = import ./bootstrap.nix;
     ghc = import ./ghc.nix;
     ghc-packages = import ./ghc-packages.nix;
@@ -21,8 +20,8 @@ let
     nix-prefetch-git-minimal = import ./nix-prefetch-git-minimal.nix;
     gobject-introspection = import ./gobject-introspection.nix;
     hix = import ./hix.nix;
-    eval-packages = import ./eval-packages.nix combined;
     ghcjs = import ./ghcjs.nix;
+    cabalPkgConfig = import ./cabal-pkg-config.nix;
   };
 
   composeExtensions = f: g: final: prev:
@@ -41,7 +40,6 @@ let
     })
     wine
     haskell
-    hackage-quirks
     bootstrap
     ghc
     ghc-packages
@@ -54,9 +52,9 @@ let
     emscripten
     nix-prefetch-git-minimal
     ghcjs
+    cabalPkgConfig
     gobject-introspection
     hix
-    eval-packages
     hydra
     # Restore nixpkgs haskell and haskellPackages
     (_: prev: { inherit (prev.haskell-nix-prev) haskell haskellPackages; })

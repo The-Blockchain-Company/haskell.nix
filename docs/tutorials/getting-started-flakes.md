@@ -12,6 +12,37 @@ project and its dependencies into Nix code.
 Assuming you have [Nix](https://nixos.org/download.html) installed, you can
 start setting up your project.
 
+## Using `flake init` and `nix`
+
+The `flake init` command create an example `hello` package from hackage
+containing an `flake.nix` and `nix/hix.nix` file. The project can be used with
+regular `nix` tools.
+
+```bash
+nix flake init --template templates#haskell-nix --impure
+# `--impure` is required by `builtins.currentSystem`
+nix develop
+cabal build
+```
+
+To view the contents of the flake run:
+
+```
+nix flake show
+```
+
+To build a component with nix:
+
+```
+nix build .#hello:exe:hello
+```
+
+To build and run a component:
+
+```
+nix run .#hello:exe:hello
+```
+
 ## Setting up the binary cache
 
 IMPORTANT: you *must* do this or you *will* build several copies of GHC!
@@ -21,11 +52,35 @@ You can configure Nix to use our binary cache, which is pushed to by CI, so shou
 You need to add the following sections to `/etc/nix/nix.conf` or, if you are a trusted user, `~/.config/nix/nix.conf` (if you don't know what a "trusted user" is, you probably want to do the former).
 
 ```
-trusted-public-keys = [...] hydra.tbco.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= [...]
-substituters = [...] https://hydra.tbco.io [...]
+trusted-public-keys = [...] hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= [...]
+substituters = [...] https://cache.iog.io [...]
 ```
 
-This can be tricky to get setup properly. If you're still having trouble getting cache hits, consult the corresponding [troubleshooting section](../reference/troubleshooting#why-am-i-building-ghc).
+If you're running NixOS, you need to add/update the following in your `/etc/nixos/configuration.nix` files instead.
+
+```nix
+# Binary Cache for Haskell.nix
+nix.settings.trusted-public-keys = [
+  "hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+];
+nix.settings.substituters = [
+  "https://cache.iog.io"
+];
+```
+
+NixOS-21.11 and older use slightly different settings.
+
+```nix
+# Binary Cache for Haskell.nix  
+nix.binaryCachePublicKeys = [
+  "hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+];
+nix.binaryCaches = [
+  "https://cache.iog.io"
+];   
+```
+
+This can be tricky to get setup properly. If you're still having trouble getting cache hits, consult the corresponding [troubleshooting section](../troubleshooting.md#why-am-i-building-ghc).
 
 ## Scaffolding
 
@@ -35,52 +90,13 @@ projects.
 Add `flake.nix`:
 
 ```nix
-{
-  description = "A very basic flake";
-  inputs.haskellNix.url = "github:The-Blockchain-Company/haskell.nix";
-  inputs.nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  outputs = { self, nixpkgs, flake-utils, haskellNix }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ] (system:
-    let
-      overlays = [ haskellNix.overlay
-        (final: prev: {
-          # This overlay adds our project to pkgs
-          helloProject =
-            final.haskell-nix.project' {
-              src = ./.;
-              compiler-nix-name = "ghc8104";
-              # This is used by `nix develop .` to open a shell for use with
-              # `cabal`, `hlint` and `haskell-language-server`
-              shell.tools = {
-                cabal = {};
-                hlint = {};
-                haskell-language-server = {};
-              };
-              # Non-Haskell shell tools go here
-              shell.buildInputs = with pkgs; [
-                nixpkgs-fmt
-              ];
-              # This adds `js-unknown-ghcjs-cabal` to the shell.
-              # shell.crossPlatforms = p: [p.ghcjs];
-            };
-        })
-      ];
-      pkgs = import nixpkgs { inherit system overlays; inherit (haskellNix) config; };
-      flake = pkgs.helloProject.flake {
-        # This adds support for `nix build .#js-unknown-ghcjs-cabal:hello:exe:hello`
-        # crossPlatforms = p: [p.ghcjs];
-      };
-    in flake // {
-      # Built by `nix build .`
-      defaultPackage = flake.packages."hello:exe:hello";
-    });
-}
+{{#include getting-started-flakes/flake.nix}}
 ```
 
-!!! note "git dependencies"
-    If you have git dependencies in your project, you'll need
-    to [calculate sha256 hashes for them](./source-repository-hashes.md).
+> **Note:** Git dependencies
+>
+> If you have git dependencies in your project, you'll need
+> to [calculate sha256 hashes for them](./source-repository-hashes.md).
 
 ### Working with a project
 
@@ -107,7 +123,7 @@ cabal repl your-package-name:lib:your-package-name
 cabal build your-package-name
 ```
 
-To open a shell for use with `stack` see [the following issue](https://github.com/The-Blockchain-Company/haskell.nix/issues/689#issuecomment-643832619).
+To open a shell for use with `stack` see [the following issue](https://github.com/the-blockchain-company/haskell.nix/issues/689#issuecomment-643832619).
 
 ## Going forward
 
@@ -115,4 +131,4 @@ Read through [project](../reference/library.md#project) function reference to se
 
 There are a number of things to explore further in the tutorials section.
 
-[haskell.nix]: https://github.com/The-Blockchain-Company/haskell.nix
+[haskell.nix]: https://github.com/the-blockchain-company/haskell.nix

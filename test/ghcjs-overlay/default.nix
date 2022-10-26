@@ -1,14 +1,22 @@
-{ stdenv, lib, cabalProject', haskellLib, recurseIntoAttrs, testSrc, compiler-nix-name }:
+{ stdenv, lib, cabalProject', haskellLib, recurseIntoAttrs, testSrc, compiler-nix-name, evalPackages }:
 
 with lib;
 
 let
   project = cabalProject' {
     src = testSrc "ghcjs-overlay";
-    inherit compiler-nix-name;
+    inherit compiler-nix-name evalPackages;
+    cabalProjectLocal = lib.optionalString stdenv.hostPlatform.isGhcjs ''
+      repository ghcjs-overlay
+        url: https://raw.githubusercontent.com/the-blockchain-company/hackage-overlay-ghcjs/bfc363b9f879c360e0a0460ec0c18ec87222ec32
+        secure: True
+        root-keys:
+        key-threshold: 0
+        --sha256: sha256-y1vQnXI1XzkjnC4h66tVDmu2TZjZPcMrZEnE3m0XOfg=
+    '';
     # Alternative to the --sha256 comment in cabal.project
     # sha256map = {
-    #  "https://raw.githubusercontent.com/The-Blockchain-Company/hackage-overlay-ghcjs/bfc363b9f879c360e0a0460ec0c18ec87222ec32" =
+    #  "https://raw.githubusercontent.com/the-blockchain-company/hackage-overlay-ghcjs/bfc363b9f879c360e0a0460ec0c18ec87222ec32" =
     #    "sha256-g9xGgJqYmiczjxjQ5JOiK5KUUps+9+nlNGI/0SpSOpg=";
     # };
   };
@@ -38,7 +46,7 @@ in recurseIntoAttrs {
         optionalString (!stdenv.hostPlatform.isAarch32 && !stdenv.hostPlatform.isAarch64) (''
           printf "checking that executable is dynamically linked to system libraries... " >& 2
         '' + optionalString stdenv.isLinux ''
-          ldd $exe | grep libpthread
+          ldd $exe | grep 'libc\.so'
         '' + optionalString stdenv.isDarwin ''
           otool -L $exe |grep .dylib
       '')) + ''

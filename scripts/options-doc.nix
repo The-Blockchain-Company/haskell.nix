@@ -22,7 +22,7 @@ let
   singleMarkdown = name: value: ''
     ## ${name}
 
-    ${lib.optionalString (value.description != null) value.description}
+    ${lib.optionalString (value.description != null) (value.description.text or value.description)}
 
     **Type**: ${value.type}
 
@@ -52,7 +52,7 @@ Haskell.nix modules options for packages and components.
 
 !!! note "Generated"
     This documentation is generated from Nix sources in the
-    [`modules`](https://github.com/The-Blockchain-Company/haskell.nix/tree/master/modules)
+    [`modules`](https://github.com/the-blockchain-company/haskell.nix/tree/master/modules)
     subdirectory using `scripts/update-docs.nix`
 
 # Configuration Options

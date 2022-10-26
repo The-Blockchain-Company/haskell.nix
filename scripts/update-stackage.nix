@@ -1,6 +1,6 @@
 { stdenv, lib, writeScript, coreutils, glibc, git, openssh
 , nix-tools, cabal-install, nixFlakes
-, gawk, bash, curl, findutils }@args:
+, gawk, bash, curl, findutils, cabal-issue-8352-workaround }@args:
 
 import ./update-external.nix args {
   name = "stackage";
@@ -14,7 +14,7 @@ import ./update-external.nix args {
       git submodule update --init
       git submodule foreach git pull origin master
     else
-      git clone git@github.com:The-Blockchain-Company/stackage.nix.git
+      git clone git@github.com:the-blockchain-company/stackage.nix.git --depth 1
       cd stackage.nix
       git submodule update --init
       git submodule foreach git pull origin master

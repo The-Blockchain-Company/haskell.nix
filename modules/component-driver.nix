@@ -4,7 +4,7 @@ let
     inherit haskellLib;
     ghc = config.ghc.package;
     compiler-nix-name = config.compiler.nix-name;
-    inherit (config) nonReinstallablePkgs hsPkgs compiler;
+    inherit (config) nonReinstallablePkgs hsPkgs compiler evalPackages inputMap;
   };
 
 in
@@ -24,7 +24,7 @@ in
 
   options.reinstallableLibGhc = lib.mkOption {
     type = lib.types.bool;
-    default = false;
+    default = true;
     description = "Is lib:ghc reinstallable?";
   };
   options.setup-depends = lib.mkOption {
@@ -54,14 +54,14 @@ in
   # without reinstallable-lib:ghc, this is significantly larger.
 
   config.nonReinstallablePkgs =
-    [ "rts" "ghc-heap" "ghc-prim" "integer-gmp" "integer-simple" "base"
+    [ "rts" "ghc-prim" "integer-gmp" "integer-simple" "base"
       "deepseq" "array" "ghc-boot-th" "pretty" "template-haskell"
       # ghcjs custom packages
       "ghcjs-prim" "ghcjs-th"
     ]
     # TODO make this unconditional
     ++ lib.optionals (
-      __elem config.compiler.nix-name ["ghc901" "ghc902" "ghc921" "ghc922"]) [
+      __elem config.compiler.nix-name ["ghc901" "ghc902" "ghc921" "ghc922" "ghc923" "ghc924"]) [
       "ghc-bignum" ]
     ++ lib.optionals (!config.reinstallableLibGhc) [
       "ghc-boot"
@@ -72,6 +72,9 @@ in
       "mtl" "parsec" "process" "text" "time" "transformers"
       "unix" "xhtml" "terminfo"
       # "stm"
+    ]
+    ++ lib.optionals (!config.reinstallableLibGhc || __elem config.compiler.nix-name ["ghc865"]) [
+      "ghc-heap"
     ];
 
   options.bootPkgs = lib.mkOption {
@@ -80,12 +83,16 @@ in
 
   config.bootPkgs =  [
       "rts" "ghc-boot-th"
-      "ghc-heap" # since ghc 8.6.
       "ghcjs-prim"
    ] ++ lib.optional (!config.reinstallableLibGhc) "ghc"
     ++ lib.optionals (
-      __elem config.compiler.nix-name ["ghc901" "ghc902" "ghc921" "ghc922"]) [
+      __elem config.compiler.nix-name ["ghc901" "ghc902" "ghc921" "ghc922" "ghc923" "ghc924"]) [
       "ghc-bignum" ];
+
+  options.inputMap = lib.mkOption {
+    type = lib.types.attrsOf lib.types.unspecified;
+    default = {};
+  };
 
   options.hsPkgs = lib.mkOption {
     type = lib.types.unspecified;

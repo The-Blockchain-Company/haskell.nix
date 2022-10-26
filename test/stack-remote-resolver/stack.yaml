@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/The-Blockchain-Company/haskell.nix/master/test/stack-local-resolver/snapshot.yaml
+resolver: https://raw.githubusercontent.com/the-blockchain-company/haskell.nix/master/test/stack-local-resolver/snapshot.yaml
 
 packages:
 - .

@@ -1,4 +1,4 @@
-{ pkgs, stdenv, lib, buildPackages, haskellLib, ghc, nonReinstallablePkgs, hsPkgs, makeSetupConfigFiles, pkgconfig }@defaults:
+{ pkgs, stdenv, lib, buildPackages, haskellLib, ghc, nonReinstallablePkgs, hsPkgs, makeSetupConfigFiles }@defaults:
 
 let self =
 { component, package, name, src, enableDWARF ? false, flags ? {}, revision ? null, patches ? [], defaultSetupSrc
@@ -8,9 +8,13 @@ let self =
 , preInstall ? component.preInstall , postInstall ? component.postInstall
 , cleanSrc ? haskellLib.cleanCabalComponent package component "setup" src
 , nonReinstallablePkgs ? defaults.nonReinstallablePkgs
+, smallAddressSpace ? false
 }@drvArgs:
 
 let
+  ghc = (if enableDWARF then (x: x.dwarf) else (x: x)) (
+        (if smallAddressSpace then (x: x.smallAddressSpace) else (x: x)) defaults.ghc);
+
   cleanSrc' = haskellLib.rootAndSubDir cleanSrc;
 
   fullName = "${name}-setup";
@@ -30,11 +34,18 @@ let
       ;
   };
 
-  executableToolDepends =
+  # the build-tools version might be depending on the version of the package, similarly to patches
+  executableToolDepends = 
+    let inherit (component) pkgconfig build-tools; in
     (lib.concatMap (c: if c.isHaskell or false
       then builtins.attrValues (c.components.exes or {})
-      else [c]) component.build-tools) ++
-    lib.optional (component.pkgconfig != []) pkgconfig;
+      else [c]) 
+      (builtins.filter (x: !(isNull x))
+      (map 
+        (p: if builtins.isFunction p
+          then p { inherit  (package.identifier) version; inherit revision; }
+          else p) build-tools))) ++
+    lib.optional (pkgconfig != []) buildPackages.cabalPkgConfigWrapper;
 
   drv =
     stdenv.mkDerivation ({
@@ -53,6 +64,7 @@ let
         cleanSrc = cleanSrc';
         inherit configFiles;
         dwarf = self (drvArgs // { enableDWARF = true; });
+        smallAddressSpace = self (drvArgs // { smallAddressSpace = true; });
       };
 
       meta = {
@@ -71,13 +83,12 @@ let
         for f in Setup.hs Setup.lhs; do
           if [ -f $f ]; then
             echo Compiling package $f
-            ghc $f -threaded '' + (if includeGhcPackage then "-package ghc " else "")
-                + ''-package-db ${configFiles}/${configFiles.packageCfgDir} --make -o ./Setup
-            setup=$(pwd)/Setup
+            ghc $f -threaded ${if includeGhcPackage then "-package ghc " else ""
+                }-package-db ${configFiles}/${configFiles.packageCfgDir} --make -o ./Setup
           fi
         done
         [ -f ./Setup ] || (echo Failed to build Setup && exit 1)
-        runHook preBuild
+        runHook postBuild
       '';
 
       installPhase = ''

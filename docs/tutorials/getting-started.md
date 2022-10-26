@@ -14,26 +14,38 @@ IMPORTANT: you *must* do this or you *will* build several copies of GHC!
 
 You can configure Nix to use our binary cache, which is pushed to by CI, so should contain the artifacts that you need.
 
-You need to add the following sections to `/etc/nix/nix.conf` or, if you are a trusted user, `~/.config/nix/nix.conf` (if you don't know what a "trusted user" is, you probably want to do the former).
+You need to add the following sections to `/etc/nix/nix.conf` or, if you are a trusted user, `~/.config/nix/nix.conf` (if you don't know what a "trusted user" is, you probably want to do the former). `[...]` denote any existing entries.
 
 ```
-trusted-public-keys = [...] hydra.tbco.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= [...]
-substituters = [...] https://hydra.tbco.io [...]
+trusted-public-keys = [...] hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= [...]
+substituters = [...] https://cache.iog.io [...]
 ```
 
 If you're running NixOS, you need to add/update the following in your `/etc/nixos/configuration.nix` files instead.
 
-```
+```nix
 # Binary Cache for Haskell.nix
 nix.settings.trusted-public-keys = [
-  "hydra.tbco.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+  "hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
 ];
 nix.settings.substituters = [
-  "https://hydra.tbco.io"
+  "https://cache.iog.io"
 ];
 ```
 
-This can be tricky to get setup properly. If you're still having trouble getting cache hits, consult the corresponding [troubleshooting section](../../troubleshooting#why-am-i-building-ghc).
+NixOS-21.11 and older use slightly different settings.
+
+```nix
+# Binary Cache for Haskell.nix  
+nix.binaryCachePublicKeys = [
+  "hydra.quantumone.network:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+];
+nix.binaryCaches = [
+  "https://cache.iog.io"
+];   
+```
+
+This can be tricky to get setup properly. If you're still having trouble getting cache hits, consult the corresponding [troubleshooting section](../troubleshooting.md#why-am-i-building-ghc).
 
 ## Niv
 
@@ -51,14 +63,14 @@ document instead of this one.
 After installing niv you can initialize niv and pin the latest haskell.nix
 commit by running the following in the root directory of the project:
 
-```
+```shell
 niv init
-niv add The-Blockchain-Company/haskell.nix -n haskellNix
+niv add the-blockchain-company/haskell.nix -n haskellNix
 ```
 
 Then when you want to update to the latest version of haskellNix use:
 
-```
+```shell
 niv update haskellNix
 ```
 
@@ -70,41 +82,13 @@ projects.
 Add `default.nix`:
 
 ```nix
-let
-  # Read in the Niv sources
-  sources = import ./nix/sources.nix {};
-  # If ./nix/sources.nix file is not found run:
-  #   niv init
-  #   niv add The-Blockchain-Company/haskell.nix -n haskellNix
-
-  # Fetch the haskell.nix commit we have pinned with Niv
-  haskellNix = import sources.haskellNix {};
-  # If haskellNix is not found run:
-  #   niv add The-Blockchain-Company/haskell.nix -n haskellNix
-
-  # Import nixpkgs and pass the haskell.nix provided nixpkgsArgs
-  pkgs = import
-    # haskell.nix provides access to the nixpkgs pins which are used by our CI,
-    # hence you will be more likely to get cache hits when using these.
-    # But you can also just use your own, e.g. '<nixpkgs>'.
-    haskellNix.sources.nixpkgs-unstable
-    # These arguments passed to nixpkgs, include some patches and also
-    # the haskell.nix functionality itself as an overlay.
-    haskellNix.nixpkgsArgs;
-in pkgs.haskell-nix.project {
-  # 'cleanGit' cleans a source directory based on the files known by git
-  src = pkgs.haskell-nix.haskellLib.cleanGit {
-    name = "haskell-nix-project";
-    src = ./.;
-  };
-  # Specify the GHC version to use.
-  compiler-nix-name = "ghc8102"; # Not required for `stack.yaml` based projects.
-}
+{{#include getting-started/default.nix}}
 ```
 
-!!! note "git dependencies"
-    If you have git dependencies in your project, you'll need
-    to [calculate sha256 hashes for them](./source-repository-hashes.md).
+> **Note:** Git dependencies
+>
+> If you have git dependencies in your project, you'll need
+> to [calculate sha256 hashes for them](./source-repository-hashes.md).
 
 ### Working with a project
 
@@ -133,13 +117,7 @@ nix-build -A projectCross.mingwW64.hsPkgs.your-package-name.components.exes.your
 To open a shell for use with `cabal`, `hlint` and `haskell-language-server` add `shell.nix`:
 
 ```nix
-(import ./default.nix).shellFor {
-  tools = {
-    cabal = "3.2.0.0";
-    hlint = "latest";
-    haskell-language-server = "latest";
-  };
-}
+{{#include getting-started/shell.nix}}
 ```
 
 Then run:
@@ -150,7 +128,7 @@ cabal new-repl your-package-name:library:your-package-name
 cabal new-build your-package-name
 ```
 
-To open a shell for use with `stack` see [the following issue](https://github.com/The-Blockchain-Company/haskell.nix/issues/689#issuecomment-643832619).
+To open a shell for use with `stack` see [the following issue](https://github.com/the-blockchain-company/haskell.nix/issues/689#issuecomment-643832619).
 
 ## Using haskell.nix without Niv
 
@@ -159,7 +137,7 @@ If you would prefer not to use niv you can replace
 
 ```nix
 let sources = {
-    haskellNix = builtins.fetchTarball "https://github.com/The-Blockchain-Company/haskell.nix/archive/master.tar.gz";
+    haskellNix = builtins.fetchTarball "https://github.com/the-blockchain-company/haskell.nix/archive/master.tar.gz";
   };
 ```
 
@@ -174,7 +152,7 @@ Straightforward way of doing this is to change the branch name to a revision.
 
 ```nix
 let sources = {
-    haskellNix = builtins.fetchTarball "https://github.com/The-Blockchain-Company/haskell.nix/archive/f1a94a4c82a2ab999a67c3b84269da78d89f0075.tar.gz";
+    haskellNix = builtins.fetchTarball "https://github.com/the-blockchain-company/haskell.nix/archive/f1a94a4c82a2ab999a67c3b84269da78d89f0075.tar.gz";
   };
 ```
 
@@ -188,4 +166,4 @@ Read through [project](../reference/library.md#project) function reference to se
 
 There are a number of things to explore further in the tutorials section.
 
-[haskell.nix]: https://github.com/The-Blockchain-Company/haskell.nix
+[haskell.nix]: https://github.com/the-blockchain-company/haskell.nix

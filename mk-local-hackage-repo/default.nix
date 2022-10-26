@@ -17,7 +17,7 @@
 pkgs:
 { name, index }:
 
-pkgs.evalPackages.runCommand "hackage-repo-${name}" { preferLocalBuild = true; } ''
+pkgs.buildPackages.runCommand "hackage-repo-${name}" { preferLocalBuild = true; } ''
 mkdir -p $out
 export expires="4000-01-01T00:00:00Z"
 
@@ -30,7 +30,7 @@ ${
   # may not have an outputHash).
   pkgs.lib.optionalString (index ? outputHash) ''
     if [[ "${index.outputHash}" != "$index_sha256" ]]; then
-      echo "ERROR See https://github.com/The-Blockchain-Company/haskell.nix/issues/884"
+      echo "ERROR See https://github.com/the-blockchain-company/haskell.nix/issues/884"
       exit 1
     fi
 ''}

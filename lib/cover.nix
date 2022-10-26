@@ -1,23 +1,21 @@
+# The following collects coverage information from a set of given "checks" and
+# provides a coverage report showing how those "checks" cover a set of given
+# "mixLibraries".
 { stdenv, lib, haskellLib, pkgs }:
 
-# Name of the coverage report, which should be unique
+# Name of the coverage report, which should be unique.
 { name
-# Library to check coverage of
-, library
-# List of check derivations that generate coverage
-, checks
-# List of other libraries to include in the coverage report. The
-# default value if just the derivation provided as the `library`
-# argument. Use a larger list of libraries if you would like the tests
-# of one local package to generate coverage for another.
-, mixLibraries ? [library]
-# hack for project-less projects
-, ghc ? library.project.pkg-set.config.ghc.package
+# List of check derivations that generate coverage.
+, checks ? []
+# List of libraries to include in the coverage report. If one of the above
+# checks generates coverage for a particular library, coverage will only
+# be included if that library is in this list.
+, mixLibraries ? []
+# Hack for project-less projects.
+, ghc ? if mixLibraries == [] then null else (lib.head mixLibraries).project.pkg-set.config.ghc.package
 }:
 
 let
-  toBashArray = arr: "(" + (lib.concatStringsSep " " arr) + ")";
-
   mixDir = l: "${l}/share/hpc/vanilla/mix/${l.identifier.name}-${l.identifier.version}";
   mixDirs = map mixDir mixLibraries;
 
@@ -26,7 +24,7 @@ let
 in pkgs.runCommand (name + "-coverage-report")
   ({nativeBuildInputs = [ (ghc.buildGHC or ghc) pkgs.buildPackages.zip ];
     passthru = {
-      inherit name library checks;
+      inherit name checks mixLibraries;
     };
     # HPC will fail if the Haskell file contains non-ASCII characters,
     # unless our locale is set correctly. This has been fixed, but we
@@ -39,133 +37,102 @@ in pkgs.runCommand (name + "-coverage-report")
     LOCALE_ARCHIVE = "${pkgs.buildPackages.glibcLocales}/lib/locale/locale-archive";
   })
   ''
-    function markup() {
-      local -n srcDs=$1
-      local -n mixDs=$2
-      local -n includedModules=$3
-      local destDir=$4
-      local tixFile=$5
-
-      local hpcMarkupCmd=("hpc" "markup" "--destdir=$destDir")
-      for srcDir in "''${srcDs[@]}"; do
-        hpcMarkupCmd+=("--srcdir=$srcDir")
-      done
-
-      for mixDir in "''${mixDs[@]}"; do
-        hpcMarkupCmd+=("--hpcdir=$mixDir")
-      done
-
-      for module in "''${includedModules[@]}"; do
-        hpcMarkupCmd+=("--include=$module")
-      done
-
-      hpcMarkupCmd+=("$tixFile")
-
-      echo "''${hpcMarkupCmd[@]}"
-      eval "''${hpcMarkupCmd[@]}"
-    }
-
-    function sumTix() {
-      local -n includedModules=$1
-      local -n tixFs=$2
-      local outFile="$3"
-
-      local hpcSumCmd=("hpc" "sum" "--union" "--output=$outFile")
-
-      for module in "''${includedModules[@]}"; do
-        hpcSumCmd+=("--include=$module")
-      done
-
-      for tixFile in "''${tixFs[@]}"; do
-        hpcSumCmd+=("$tixFile")
-      done
-
-      echo "''${hpcSumCmd[@]}"
-      eval "''${hpcSumCmd[@]}"
-    }
-
-    function findModules() {
-      local searchDir=$2
-      local pattern=$3
-
-      pushd $searchDir
-      mapfile -d $'\0' $1 < <(find ./ -type f \
-        -wholename "$pattern" -not -name "Paths*" \
-        -exec basename {} \; \
-        | sed "s/\.mix$//" \
-        | tr "\n" "\0")
-      popd
-    }
-
-    local mixDirs=${toBashArray mixDirs}
-
     mkdir -p $out/nix-support
-    mkdir -p $out/share/hpc/vanilla/mix/${name}
+    mkdir -p $out/share/hpc/vanilla/mix/
     mkdir -p $out/share/hpc/vanilla/tix/${name}
     mkdir -p $out/share/hpc/vanilla/html/${name}
 
-    # Copy over mix files verbatim
-    for dir in "''${mixDirs[@]}"; do
-      if [ -d "$dir" ]; then
-        cp -R "$dir"/* $out/share/hpc/vanilla/mix/${name}
-      fi
-    done
+    local srcDirArgs=$(mktemp)
+    ${lib.concatStringsSep "\n" (map (srcDir: ''
+        echo --srcdir=${srcDir} >> $srcDirArgs
+      '') srcDirs)
+    }
+    local mixDirArgs=$(mktemp)
+    ${ # Copy out mix files used for this report
+      lib.concatStrings (map (mixDir: ''
+        local dir=${mixDir}
+        echo --hpcdir=$dir >> $mixDirArgs
+        if [ -d $dir ]; then
+          cp -R "$dir" $out/share/hpc/vanilla/mix/
+        fi
+      '') mixDirs)
+    }
+    local includeArgs=$(mktemp)
+    find $out/share/hpc/vanilla/mix/ -type f \
+      -wholename "*.mix" -not -name "Paths*" \
+      -exec basename {} \; \
+      | sed "s/\.mix$//" \
+      | sed "s/^.*$/--include=\0/" \
+      >> $includeArgs
 
-    local srcDirs=${toBashArray srcDirs}
-    local allMixModules=()
-    local pkgMixModules=()
-
-    # The behaviour of stack coverage reports is to provide tix files
-    # that include coverage information for every local package, but
-    # to provide HTML reports that only include coverage info for the
-    # current package. We emulate the same behaviour here. If the user
-    # includes all local packages in the mix libraries argument, they
-    # will get a coverage report very similar to stack.
-
-    # All mix modules
-    findModules allMixModules "$out/share/hpc/vanilla/mix/${name}" "*.mix"
-    # Only mix modules corresponding to this package
-    findModules pkgMixModules "$out/share/hpc/vanilla/mix/${name}" "*${name}*/*.mix"
-
-    # For each test
-    local tixFiles=()
+    local tixFiles=$(mktemp -d)/tixFiles
     ${lib.concatStringsSep "\n" (builtins.map (check: ''
       if [ -d "${check}/share/hpc/vanilla/tix" ]; then
         pushd ${check}/share/hpc/vanilla/tix
 
         tixFile="$(find . -iwholename "*.tix" -type f -print -quit)"
-        local newTixFile=$out/share/hpc/vanilla/tix/${name}/"$tixFile"
+        local newTixFile=$out/share/hpc/vanilla/tix/${check.name}/"$(basename $tixFile)"
 
         mkdir -p "$(dirname $newTixFile)"
         # Copy over the tix file verbatim
         cp "$tixFile" "$newTixFile"
 
         # Add the tix file to our list
-        tixFiles+=("$newTixFile")
+        echo $newTixFile >> $tixFiles
 
-        # Create a coverage report for *just that test*
-        markup srcDirs mixDirs pkgMixModules "$out/share/hpc/vanilla/html/${name}/${check.exeName}/" "$newTixFile"
+        # Create a coverage report for *just that check* affecting any of the
+        # "mixLibraries"
+        local responseFile=$(mktemp)
+        echo markup > $responseFile
+        echo '--destdir'=$out/share/hpc/vanilla/html/${check.name}/ >> $responseFile
+        cat $srcDirArgs $mixDirArgs $includeArgs >> $responseFile
+        echo $newTixFile >> $responseFile
+
+        echo hpc response file:
+        cat $responseFile
+        hpc @$responseFile
 
         popd
       fi
     '') checks)
     }
 
-    # Sum tix files to create a tix file with all relevant tix
-    # information and markup a HTML report from this info.
-    if (( "''${#tixFiles[@]}" > 0 )); then
-      local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
-      local markupOutDir="$out/share/hpc/vanilla/html/${name}"
+    # Sum tix files to create a tix file with tix information from all tests in
+    # the package and markup a HTML report from this info.
+    local sumTixFile="$out/share/hpc/vanilla/tix/${name}/${name}.tix"
+    local markupOutDir="$out/share/hpc/vanilla/html/${name}"
 
-      # Sum all of our tix file, including modules from any local package
-      sumTix allMixModules tixFiles "$sumTixFile"
+    # Sum all of our tix files
+    if [ -e $tixFiles ]; then
+      local responseFile=$(mktemp)
+      echo sum > $responseFile
+      echo '--union' >> $responseFile
+      echo '--output'=$sumTixFile >> $responseFile
+      cat $includeArgs >> $responseFile
+      cat $tixFiles >> $responseFile
 
-      # Markup a HTML report, included modules from only this package
-      markup srcDirs mixDirs pkgMixModules "$markupOutDir" "$sumTixFile"
-
-      # Provide a HTML zipfile and Hydra links
-      ( cd "$markupOutDir" ; zip -r $out/share/hpc/vanilla/${name}-html.zip . )
-      echo "report coverage $markupOutDir/hpc_index.html" >> $out/nix-support/hydra-build-products
-      echo "file zip $out/share/hpc/vanilla/${name}-html.zip" >> $out/nix-support/hydra-build-products
+      echo hpc response file:
+      cat $responseFile
+      hpc @$responseFile
+    else
+      # If there are no tix files we output an empty tix file so that we can
+      # markup an empty HTML coverage report. This is preferable to failing to
+      # output a HTML report.
+      echo 'Tix []' > $sumTixFile
     fi
+
+    # Markup a HTML report
+    local responseFile=$(mktemp)
+    echo markup > $responseFile
+    echo '--destdir'=$markupOutDir >> $responseFile
+    cat $srcDirArgs $mixDirArgs $includeArgs >> $responseFile
+    echo $sumTixFile >> $responseFile
+    echo hpc response file:
+    cat $responseFile
+    hpc @$responseFile
+
+    # Provide a HTML zipfile and Hydra links
+    ( cd "$markupOutDir" ; zip -r $out/share/hpc/vanilla/${name}-html.zip . )
+    echo "report coverage $markupOutDir/hpc_index.html" >> $out/nix-support/hydra-build-products
+    echo "file zip $out/share/hpc/vanilla/${name}-html.zip" >> $out/nix-support/hydra-build-products
   ''

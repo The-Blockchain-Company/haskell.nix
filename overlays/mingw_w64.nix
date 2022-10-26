@@ -32,8 +32,8 @@ let
     ln -s ${if enableProfiling then remote-iserv.override { inherit enableProfiling; } else remote-iserv}/bin/* $REMOTE_ISERV
     # See coment in comp-builder.nix for where this comes from and why it's here
     for p in $pkgsHostTargetAsString; do
-      find "$p" -iname '*.dll' -exec ln -s {} $REMOTE_ISERV \;
-      find "$p" -iname '*.dll.a' -exec ln -s {} $REMOTE_ISERV \;
+      find "$p" -iname '*.dll' -exec ln -sf {} $REMOTE_ISERV \;
+      find "$p" -iname '*.dll.a' -exec ln -sf {} $REMOTE_ISERV \;
     done
     # Some DLLs have a `lib` prefix but we attempt to load them without the prefix.
     # This was a problem for `double-conversion` package when used in TH code.
@@ -44,6 +44,8 @@ let
       ln -s "$l" "''${l#lib}"
     done
     )
+    # Not sure why this `unset` helps.  It might avoids some kind of overflow issue.  We see `wine` fail to start when building `bcc-wallet-cli` test `unit`.
+    unset pkgsHostTargetAsString
     WINEDLLOVERRIDES="winemac.drv=d" WINEDEBUG=warn-all,fixme-all,-menubuilder,-mscoree,-ole,-secur32,-winediag WINEPREFIX=$TMP ${wine}/bin/wine64 $REMOTE_ISERV/remote-iserv.exe tmp $PORT &
     (>&2 echo "---| remote-iserv should have started on $PORT")
     RISERV_PID="$!"

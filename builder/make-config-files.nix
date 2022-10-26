@@ -3,11 +3,17 @@
 { identifier, component, fullName, flags ? {}, needsProfiling ? false, enableDWARF ? false, chooseDrv ? drv: drv, nonReinstallablePkgs ? defaults.nonReinstallablePkgs }:
 
 let
+  # Sort and remove duplicates from nonReinstallablePkgs.
+  # That way changes to the order of nonReinstallablePkgs does not require rebuilds.
+  nonReinstallablePkgs' = __attrNames (lib.genAttrs nonReinstallablePkgs (x: x));
+
   ghc = if enableDWARF then defaults.ghc.dwarf else defaults.ghc;
 
   flagsAndConfig = field: xs: lib.optionalString (xs != []) ''
     echo ${lib.concatStringsSep " " (map (x: "--${field}=${x}") xs)} >> $out/configure-flags
-    echo "${field}: ${lib.concatStringsSep " " xs}" >> $out/cabal.config
+    ${lib.concatStrings (map (x: ''
+      echo "${field}: ${x}" >> $out/cabal.config
+    '') xs)}
   '';
 
   target-pkg = "${ghc.targetPrefix}ghc-pkg";
@@ -81,19 +87,20 @@ let
     ${target-pkg} init $out/${packageCfgDir}
 
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList flagsAndConfig {
-      "extra-lib-dirs" = map (p: "${lib.getLib p}/lib") component.libs
+      "extra-lib-dirs" = map (p: "${lib.getLib p}/lib") (lib.flatten component.libs)
         # On windows also include `bin` directories that may contain DLLs
         ++ lib.optionals (stdenv.hostPlatform.isWindows)
           (map (p: "${lib.getBin p}/bin")
-               (component.libs ++ lib.concatLists component.pkgconfig));
-      "extra-include-dirs" = map (p: "${lib.getDev p}/include") component.libs;
-      "extra-framework-dirs" = map (p: "${p}/Library/Frameworks") component.frameworks;
+               (lib.flatten component.libs ++ lib.concatLists component.pkgconfig));
+      "extra-include-dirs" = map (p: "${lib.getDev p}/include") (lib.flatten component.libs);
+      "extra-framework-dirs" = lib.optionals (stdenv.hostPlatform.isDarwin)
+        (map (p: "${p}/Library/Frameworks") component.frameworks);
     })}
 
     ghc=${ghc}
     ${ # Copy over the nonReinstallablePkgs from the global package db.
     ''
-      for p in ${lib.concatStringsSep " " nonReinstallablePkgs}; do
+      for p in ${lib.concatStringsSep " " nonReinstallablePkgs'}; do
         find $ghc/lib/${ghc.name}/package.conf.d -name $p'*.conf' -exec cp -f {} $out/${packageCfgDir} \;
       done
     ''}
@@ -122,8 +129,11 @@ let
     done
 
     ${ # Note: we pass `clear` first to ensure that we never consult the implicit global package db.
-      flagsAndConfig "package-db" ["clear" "$out/${packageCfgDir}"]
+       # However in `cabal.config` `cabal` requires `global` to be first.
+      flagsAndConfig "package-db" ["clear"]
     }
+    echo "package-db: global" >> $out/cabal.config
+    ${ flagsAndConfig "package-db" ["$out/${packageCfgDir}"] }
 
     echo ${lib.concatStringsSep " " (lib.mapAttrsToList (fname: val: "--flags=${lib.optionalString (!val) "-" + fname}") flags)} >> $out/configure-flags
 
@@ -152,13 +162,13 @@ let
         cat $p/exactDep/cabal.config >> $out/cabal.config
       ''}
     done
-    for p in ${lib.concatStringsSep " " (lib.remove "ghc" nonReinstallablePkgs)}; do
+    for p in ${lib.concatStringsSep " " (lib.remove "ghc" nonReinstallablePkgs')}; do
       if [ -e $ghc/envDeps/$p ]; then
         cat $ghc/envDeps/$p >> $out/ghc-environment
       fi
     done
   '' + lib.optionalString component.doExactConfig ''
-    for p in ${lib.concatStringsSep " " nonReinstallablePkgs}; do
+    for p in ${lib.concatStringsSep " " nonReinstallablePkgs'}; do
       if [ -e $ghc/exactDeps/$p ]; then
         cat $ghc/exactDeps/$p/configure-flags >> $out/configure-flags
         cat $ghc/exactDeps/$p/cabal.config >> $out/cabal.config

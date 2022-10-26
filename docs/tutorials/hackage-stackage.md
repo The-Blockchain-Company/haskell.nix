@@ -1,7 +1,7 @@
 # Bumping Hackage and Stackage snapshots
 
 `haskell.nix` relies on some generated data providing information about packages in Hackage and Stackage snapshots.
-These are kept in [`hackage.nix`](https://github.com/The-Blockchain-Company/hackage.nix) and [`stackage.nix`](https://github.com/The-Blockchain-Company/stackage.nix) respectively.
+These are kept in [`hackage.nix`](https://github.com/the-blockchain-company/hackage.nix) and [`stackage.nix`](https://github.com/the-blockchain-company/stackage.nix) respectively.
 If your project depends on a Hackage package, then the `hackage.nix` revision used must be new enough to contain that, and likewise for Stackage snaphots and `stackage.nix`.
 
 ## Updating and pinning `hackage.nix` and `stackage.nix`
@@ -13,20 +13,7 @@ However, this exposes you to changes in `haskell.nix` which you may not want, su
 Instead, you can pin `hackage.nix` and `stackage.nix` independently. For example:
 
 ```nix
-let
-  # You can use a tool like `niv` to manage this boilerplate
-  hackageSrc = builtins.fetchTarball https://github.com/The-Blockchain-Company/hackage.nix/archive/master.tar.gz;
-  stackageSrc = builtins.fetchTarball https://github.com/The-Blockchain-Company/stackage.nix/archive/master.tar.gz;
-  haskellSrc = builtins.fetchTarball https://github.com/The-Blockchain-Company/haskell.nix/archive/master.tar.gz;
-
-  haskellNix = import haskellSrc {
-    # This allows you to override the pins used by `haskell.nix` internally
-    sourcesOverride = {
-      hackage = hackageSrc;
-      stackage = stackageSrc;
-    };
-  };
-in ...
+{{#include hackage-stackage/default.nix}}
 ```
 
 This way you can change the revisions of `hackage.nix` and `stackage.nix`

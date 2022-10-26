@@ -26,7 +26,7 @@ and `stackage.nix`.
 ```
 haskell.nix diagram
 
-## [nix-tools](https://github.com/The-Blockchain-Company/nix-tools)
+## [nix-tools](https://github.com/the-blockchain-company/nix-tools)
 
 nix-tools is a Haskell package that provides the following tools:
 
@@ -63,6 +63,6 @@ snapshots (lts, and nightly) as nix expressions.  It naturally depends
 on hackage.nix to resolve package names, versions and revisions to the
 respective packages from hackage.nix.
 
-[haskell.nix]: https://github.com/The-Blockchain-Company/haskell.nix
-[hackage.nix]: https://github.com/The-Blockchain-Company/hackage.nix
-[stackage.nix]: https://github.com/The-Blockchain-Company/stackage.nix
+[haskell.nix]: https://github.com/the-blockchain-company/haskell.nix
+[hackage.nix]: https://github.com/the-blockchain-company/hackage.nix
+[stackage.nix]: https://github.com/the-blockchain-company/stackage.nix

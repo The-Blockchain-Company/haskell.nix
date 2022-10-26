@@ -29,6 +29,23 @@ nixpkgs.overlays = [
 ];
 ```
 
+The user can map package(s) in Nixpkgs to a `pkgconfig-depends` name by
+overlaying the `haskell-nix.extraPkgconfigMappings` attribute:
+
+```nix
+nixpkgs.overlays = [
+  (self: super: {
+    haskell-nix = super.haskell-nix // {
+      extraPkgconfigMappings = super.haskell-nix.extraPkgconfigMappings // {
+          # String pkgconfig-depends names are mapped to lists of Nixpkgs
+          # package names
+          "SDL_gpu" = [ "SDL_gpu" ];
+      };
+    };
+  })
+];
+```
+
 ### Replace libraries of components
 
 If a component is missing a dependency it can be added via modules. For example:
@@ -50,19 +67,20 @@ project = pkgs.haskell-nix.project' {
 Alternatively, if the name is commonly used, an alias can be added to
 the Haskell.nix sources, so that it's solved for all users.
 
-* [`lib/pkgconf-nixpkgs-map.nix`](https://github.com/The-Blockchain-Company/haskell.nix/blob/master/lib/pkgconf-nixpkgs-map.nix)
+* [`lib/pkgconf-nixpkgs-map.nix`](https://github.com/the-blockchain-company/haskell.nix/blob/master/lib/pkgconf-nixpkgs-map.nix)
   — for `pkgconfig-depends`.
 
   Each mapping entry is a list of packages.
 
-* [`lib/system-nixpkgs-map.nix`](https://github.com/The-Blockchain-Company/haskell.nix/blob/master/lib/system-nixpkgs-map.nix)
+* [`lib/system-nixpkgs-map.nix`](https://github.com/the-blockchain-company/haskell.nix/blob/master/lib/system-nixpkgs-map.nix)
   — for `build-tool-depends`, `frameworks`, `extra-libraries`, etc.
 
   Each name can be mapped to:
-  1. A single package from nixkpgs.
+  1. A single package from nixpkgs.
   2. `null` — eliminates the dependency
   3. A list of packages — sometimes needed for dependencies such as `X11`.
 
-!!! tip "Open a PR"
-    Please go ahead and open a [pull request](https://github.com/The-Blockchain-Company/haskell.nix/pulls)
-    to improve the package mappings.
+> **Tip:** Open a PR
+>
+> Please go ahead and open a [pull request](https://github.com/the-blockchain-company/haskell.nix/pulls)
+> to improve the package mappings.

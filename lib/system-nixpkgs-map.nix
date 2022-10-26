@@ -6,16 +6,32 @@ pkgs:
 
 with pkgs;
 
+let
+  # On windows systems we need these to be propagatedBuildInputs so that the DLLs will be found.
+  gcclibs = if pkgs.stdenv.hostPlatform.isWindows then [
+    pkgs.windows.mcfgthreads
+    # If we just use `pkgs.buildPackages.gcc.cc` here it breaks the `th-dlls` test. TODO figure out why exactly.
+    (pkgs.buildPackages.runCommand "gcc-only" { nativeBuildInputs = [ pkgs.buildPackages.xorg.lndir ]; } ''
+      mkdir $out
+      lndir ${pkgs.buildPackages.gcc.cc} $out
+    '')
+  ] else [];
+in
 # -- linux
 { crypto = [ openssl ];
-  "c++" = null; # no libc++
-  "stdc++" = null;
-  "stdc++-6" = null;
+  "c++" = []; # no libc++
+  "stdc++" = gcclibs;
+  "stdc++-6" = gcclibs;
+  gcc_s_seh-1 = gcclibs;
+  gcc_s = gcclibs;
+  gcc = gcclibs;
   ssl = [ openssl ];
   z = [ zlib ];
+  m = []; # Included with ghc
   pcap = [ libpcap ];
   pthread = null; # available by default
   GL = [ libGL ];
+  GLEW = [ glew ];
   GLU = [ libGLU ];
   alut = [ freealut ];
   X11 = with xorg; [ libX11 ];
@@ -35,6 +51,7 @@ with pkgs;
   util = [ utillinux ];
   magic = [ file ];
   pq = [ postgresql ];
+  libpq = [ postgresql ];
   iconv = [ libiconv ];
   lapack = [ liblapack ];
   boost_atomic = [ boost ];
@@ -87,6 +104,16 @@ with pkgs;
   gfortran = [ gfortran.cc.lib ];
   ssh2 = [ libssh2 ];
   gpiod = [ libgpiod ];
+  png = [ libpng ];
+  jpeg = [ libjpeg ];
+  freenect_sync = [ freenect ];
+  FLAC = [ flac ];
+  mp3lame = [ lame ];
+  tag_c = [ taglib ];
+  jwt = [ libjwt ];
+  GeoIP = [ geoip ];
+  pulse-simple = [ libpulseaudio ];
+  oath = [ liboauth ];
 }
 # -- windows
 // { advapi32 = null; gdi32 = null; imm32 = null; msimg32 = null;
@@ -94,16 +121,16 @@ with pkgs;
      ole32 = null; rpcrt4 = null;
      winmm = null; userenv = null;
      kernel32 = null; ws2_32 = null;
+     opengl32 = null; glu32 = null;
      # this should be bundled with gcc.
      # if it's not we have more severe
      # issues anyway.
-     gcc_s_seh-1 = null;
-     gcc_s = null;
      ssl32 = null; eay32 = [ openssl ];
      iphlpapi = null; # IP Help API
      msvcrt = null; # this is the libc
      Crypt32 = null;
      mswsock = null;
+     bcrypt = null;
    }
 # -- os x
 # NB: these map almost 1:1 to the framework names

@@ -3,7 +3,7 @@ name:                test-with-packages
 version:             0.1.0.0
 license:             NONE
 author:              Rodney Lorrimar
-maintainer:          rodney.lorrimar@tbco.io
+maintainer:          rmourey_jr@blockchain-company.io
 
 library
   exposed-modules:     TestWithPackages

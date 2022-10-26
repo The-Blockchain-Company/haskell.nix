@@ -16,24 +16,21 @@ final: prev:
   #   postFixup = "";
   #  });
 } // prev.lib.optionalAttrs (prev ? mfpr) {
-   mfpr = prev.mfpr.overrideAttrs (drv: {
-     configureFlags = (drv.configureFlags or []) ++ prev.lib.optional prev.stdenv.hostPlatform.isWindows "--enable-static --disable-shared" ;
+   mfpr = if !prev.stdenv.hostPlatform.isWindows then prev.mpfr else prev.mfpr.overrideAttrs (drv: {
+     configureFlags = (drv.configureFlags or []) ++ [ "--enable-static --disable-shared" ];
    });
 } // {
-   libmpc = prev.libmpc.overrideAttrs (drv: {
-     configureFlags = (drv.configureFlags or []) ++ prev.lib.optional prev.stdenv.hostPlatform.isWindows "--enable-static --disable-shared" ;
+   libmpc = if !prev.stdenv.hostPlatform.isWindows then prev.libmpc else prev.libmpc.overrideAttrs (drv: {
+     configureFlags = (drv.configureFlags or []) ++ [ "--enable-static --disable-shared" ];
    });
 
-   binutils-unwrapped = prev.binutils-unwrapped.overrideAttrs (attrs: {
-     patches = attrs.patches ++ final.lib.optional (final.stdenv.targetPlatform.isWindows && attrs.version or "" == "2.31.1") (
-       final.fetchpatch {
-         name = "plugin-target-handling-patch";
-         url = "https://sourceware.org/git/?p=binutils-gdb.git;a=patch;h=999d6dff80fab12d22c2a8d91923db6bde7fb3e5";
-         excludes = ["bfd/ChangeLog"];
-         sha256 = "0a60w52wrf6qzchsiviprmcblq0q1fv1rbkx4gkk482dmvx4j0l6";
-       }
-     );
-   });
+   # GHC <9.4 does not work with binutils 2.38 from newer nixpkgs.
+   # GHC >=9.4 will use clang/llvm instead.
+   binutils-unwrapped =
+     if final.stdenv.targetPlatform.isWindows
+       then (import prev.haskell-nix.sources.nixpkgs-2111 { inherit (prev) system; })
+         .pkgsCross.mingwW64.buildPackages.binutils-unwrapped
+       else prev.binutils-unwrapped;
 
    haskell-nix = prev.haskell-nix // ({
      defaultModules = prev.haskell-nix.defaultModules ++ [
@@ -62,26 +59,8 @@ final: prev:
       in {
         packages = {
 
-          # This is a rather bad hack.  What we *really* would want is to make
-          # sure remote-iserv has access to all the relevant libraries it needs.
-          # As windows looks the libraries up next to the executable, and iserv
-          # ends up dynamically loading code and executing it, we need to place
-          # the necessary libraries right next to it. At least those libraries
-          # we need during the build.
-          # This would be fixed properly in the mingw_w64.nix file by dynamically
-          # figuring out which libraries we need for the build (walking the
-          # dependencies) and then placing them somewhere where wine+remote-iserv
-          # will find them.
-          remote-iserv.postInstall = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isWindows (
-            let extra-libs = [ pkgs.libffi pkgs.gmp pkgs.windows.mcfgthreads pkgs.buildPackages.gcc.cc ]; in ''
-            for p in ${lib.concatStringsSep " "extra-libs}; do
-              find "$p" -iname '*.dll' -exec cp {} $out/bin/ \;
-              find "$p" -iname '*.dll.a' -exec cp {} $out/bin/ \;
-            done
-          '');
-
           # Apply https://github.com/haskell/cabal/pull/6055
-          # See also https://github.com/The-Blockchain-Company/tbco-nix/issues/136
+          # See also https://github.com/the-blockchain-company/tbco-nix/issues/136
           # Cabal.patches = [ ({ version, revision }: (if builtins.compareVersions version "3.0.0" < 0
           #   then pkgs.fetchpatch {
           #     url = "https://patch-diff.githubusercontent.com/raw/haskell/cabal/pull/6055.diff";
@@ -126,6 +105,9 @@ final: prev:
           network.setupBuildFlags = [];
           unix.setupBuildFlags = [];
 
+          # Newer Win32 includes hsc2hs, but we can get that that from the ghc derivation and
+          # if the cabal plan included hsc2hs it winds up trying to build a windows version.
+          Win32.components.library.build-tools = pkgs.lib.mkForce [];
         }
         # Fix dependencies and case-sensitive filesystem builds for unix-time.
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isWindows {

@@ -3,7 +3,7 @@ name:                test-ghc-options
 version:             0.1.0.0
 license:             PublicDomain
 author:              Hamish Mackenzie
-maintainer:          Hamish.Mackenzie@tbco.io
+maintainer:          Hamish.Mackenzie@maintainer:          rmourey_jr@blockchain-company.io
 build-type:          Simple
 
 library

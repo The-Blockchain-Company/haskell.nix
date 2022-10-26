@@ -1,7 +1,7 @@
 { stdenv, lib, writeScript, coreutils, glibc, git, openssh
 , nix-tools, cabal-install, nixFlakes
 , gawk, bash, curl, findutils
-, update-index-state-hashes }@args:
+, update-index-state-hashes, cabal-issue-8352-workaround }@args:
 
 import ./update-external.nix
 (removeAttrs args ["update-index-state-hashes"]) {
@@ -13,7 +13,7 @@ import ./update-external.nix
       git pull --ff-only
       cd ..
     else
-      git clone git@github.com:The-Blockchain-Company/hackage.nix.git
+      git clone git@github.com:the-blockchain-company/hackage.nix.git --depth 1
     fi
 
     set -x

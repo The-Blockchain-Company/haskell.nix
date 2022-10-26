@@ -50,6 +50,7 @@ let self =
 , writeHieFiles ? component.writeHieFiles
 
 , ghcOptions ? component.ghcOptions
+, contentAddressed ? component.contentAddressed
 
 # Options for Haddock generation
 , doHaddock ? component.doHaddock  # Enable haddock and hoogle generation
@@ -99,9 +100,10 @@ let
     && !stdenv.hostPlatform.isMusl
     && builtins.compareVersions defaults.ghc.version "8.10.2" >= 0;
 
-  ghc = if enableDWARF then defaults.ghc.dwarf else
-        if smallAddressSpace then defaults.ghc.smallAddressSpace else defaults.ghc;
-  setup = if enableDWARF then drvArgs.setup.dwarf else drvArgs.setup;
+  ghc = (if enableDWARF then (x: x.dwarf) else (x: x)) (
+        (if smallAddressSpace then (x: x.smallAddressSpace) else (x: x)) defaults.ghc);
+  setup = (if enableDWARF then (x: x.dwarf) else (x: x)) (
+        (if smallAddressSpace then (x: x.smallAddressSpace) else (x: x)) drvArgs.setup);
 
   # TODO fix cabal wildcard support so hpack wildcards can be mapped to cabal wildcards
   canCleanSource = !(cabal-generator == "hpack" && !(package.cleanHpack or false));
@@ -223,19 +225,34 @@ let
         "--ghc-option=-fPIC" "--gcc-option=-fPIC"
         ]
       ++ map (o: ''--ghc${lib.optionalString (stdenv.hostPlatform.isGhcjs) "js"}-options="${o}"'') ghcOptions
+      ++ lib.optional (
+        # GHC 9.2 cross compiler built with older versions of GHC seem to have problems
+        # with unique conters.  Perhaps because the name changed for the counters.
+        # TODO This work around to use `-j1` should be removed once we are able to build 9.2 with 9.2.
+        haskellLib.isCrossHost
+          && builtins.compareVersions defaults.ghc.version "9.2.1" >= 0
+          && builtins.compareVersions defaults.ghc.version "9.3" < 0)
+        "--ghc-options=-j1"
     );
 
+  # the build-tools version might be depending on the version of the package, similarly to patches
   executableToolDepends =
     (lib.concatMap (c: if c.isHaskell or false
       then builtins.attrValues (c.components.exes or {})
-      else [c]) build-tools) ++
-    lib.optional (pkgconfig != []) buildPackages.pkgconfig;
+      else [c]) 
+      (builtins.filter (x: !(isNull x))
+      (map 
+        (p: if builtins.isFunction p
+          then p { inherit  (package.identifier) version; inherit revision; }
+          else p) build-tools))) ++
+    lib.optional (pkgconfig != []) buildPackages.cabalPkgConfigWrapper;
 
   # Unfortunately, we need to wrap ghc commands for cabal builds to
   # work in the nix-shell. See ../doc/removing-with-package-wrapper.md.
   shellWrappers = ghcForComponent {
     componentName = fullName;
     inherit configFiles enableDWARF;
+    inherit (component) plugins;
   };
 
   # In order to let shell hooks make package-specific things like Hoogle databases
@@ -306,7 +323,13 @@ let
     componentDrv = drv;
   };
 
-  drv = stdenv.mkDerivation (commonAttrs // {
+  contentAddressedAttrs = lib.optionalAttrs contentAddressed {
+    __contentAddressed = true;
+    outputHashMode = "recursive";
+    outputHashAlgo = "sha256";
+  };
+                    
+  drv = stdenv.mkDerivation (commonAttrs // contentAddressedAttrs // {
     pname = nameOnly;
     inherit (package.identifier) version;
 
@@ -339,16 +362,28 @@ let
       description = package.synopsis or "";
       license = haskellLib.cabalToNixpkgsLicense package.license;
       platforms = if platforms == null then lib.platforms.all else platforms;
+    } // lib.optionalAttrs (haskellLib.isExecutableType componentId) {
+      # Set main executable name for executable components, so that `nix run` in
+      # nix flakes will work correctly. When not set, `nix run` would (typically
+      # erroneously) deduce the executable name from the derivation name and
+      # attempt to run, for example,
+      # `/nix/store/...-project-exe-app-0.1.0.0/bin/project-exe-app` instead of
+      # `/nix/store/...-project-exe-app-0.1.0.0/bin/app`.
+      mainProgram = exeName;
     };
 
     propagatedBuildInputs =
          frameworks # Frameworks will be needed at link time
       # Not sure why pkgconfig needs to be propagatedBuildInputs but
       # for gi-gtk-hs it seems to help.
-      ++ builtins.concatLists pkgconfig;
+      ++ map pkgs.lib.getDev (builtins.concatLists pkgconfig)
+      ++ lib.optionals (stdenv.hostPlatform.isWindows)
+        (lib.flatten component.libs
+        ++ map haskellLib.dependToLib component.depends);
 
-    buildInputs = component.libs
-      ++ map haskellLib.dependToLib component.depends;
+    buildInputs = lib.optionals (!stdenv.hostPlatform.isWindows)
+      (lib.flatten component.libs
+      ++ map haskellLib.dependToLib component.depends);
 
     nativeBuildInputs =
       [shellWrappers buildPackages.removeReferencesTo]
@@ -391,7 +426,17 @@ let
       (lib.optionalString stdenv.hostPlatform.isWindows ''
         export pkgsHostTargetAsString="''${pkgsHostTarget[@]}"
       '') +
-      (if stdenv.hostPlatform.isGhcjs then ''
+      # The following could be refactored but would lead to many rebuilds
+
+      # In case of content addressed components we need avoid parallel building (passing -j1)
+      # in order to have a deterministic output and therefore avoid potential situations
+      # where the binary cache becomes useless
+      # See also https://gitlab.haskell.org/ghc/ghc/-/issues/12935
+      (if contentAddressed then ''
+        runHook preBuild
+        $SETUP_HS build ${haskellLib.componentTarget componentId} -j1 ${lib.concatStringsSep " " setupBuildFlags}
+        runHook postBuild
+      '' else if stdenv.hostPlatform.isGhcjs then ''
         runHook preBuild
         # https://gitlab.haskell.org/ghc/ghc/issues/9221
         $SETUP_HS build ${haskellLib.componentTarget componentId} ${lib.concatStringsSep " " setupBuildFlags}
@@ -415,11 +460,13 @@ let
         target-pkg-and-db = "${ghc.targetPrefix}ghc-pkg -v0 --package-db $out/package.conf.d";
       in ''
       runHook preInstall
-      $SETUP_HS copy ${lib.concatStringsSep " " (
-        setupInstallFlags
-        ++ lib.optional configureAllComponents
-              (haskellLib.componentTarget componentId)
-      )}
+      ${ # `Setup copy` does not install tests and benchmarks.
+        lib.optionalString (!haskellLib.isTest componentId && !haskellLib.isBenchmark componentId) ''
+          $SETUP_HS copy ${lib.concatStringsSep " " (
+            setupInstallFlags
+            ++ lib.optional configureAllComponents
+                  (haskellLib.componentTarget componentId)
+          )}''}
       ${lib.optionalString (haskellLib.isLibrary componentId) ''
         $SETUP_HS register --gen-pkg-config=${name}.conf
         ${ghc.targetPrefix}ghc-pkg -v0 init $out/package.conf.d
@@ -473,7 +520,7 @@ let
         if [ -f ${testExecutable} ]; then
           mkdir -p $(dirname $out/bin/${exeName})
           ${if stdenv.hostPlatform.isGhcjs then ''
-            cat <(echo \#!${lib.getBin buildPackages.nodejs-12_x}/bin/node) ${testExecutable} >| $out/bin/${exeName}
+            cat <(echo \#!${lib.getBin buildPackages.nodejs-18_x}/bin/node) ${testExecutable} >| $out/bin/${exeName}
             chmod +x $out/bin/${exeName}
           '' else ''
              cp -r ${testExecutable} $(dirname $out/bin/${exeName})
@@ -481,7 +528,9 @@ let
         fi
       '')
       # In case `setup copy` did not create this
-      + (lib.optionalString enableSeparateDataOutput "mkdir -p $data")
+      + (lib.optionalString enableSeparateDataOutput ''
+         mkdir -p $data
+      '')
       + (lib.optionalString (stdenv.hostPlatform.isWindows && (haskellLib.mayHaveExecutable componentId)) (''
         echo "Symlink libffi and gmp .dlls ..."
         for p in ${lib.concatStringsSep " " [ libffi gmp ]}; do
@@ -489,14 +538,10 @@ let
         done
         ''
         # symlink all .dlls into the local directory.
-        # we ask ghc-pkg for *all* dynamic-library-dirs and then iterate over the unique set
-        # to symlink over dlls as needed.
         + ''
-        echo "Symlink library dependencies..."
-        for libdir in $(${stdenv.hostPlatform.config}-ghc-pkg field "*" dynamic-library-dirs --simple-output|xargs|sed 's/ /\n/g'|sort -u); do
-          if [ -d "$libdir" ]; then
-            find "$libdir" -iname '*.dll' -exec ln -s {} $out/bin \;
-          fi
+        for p in $pkgsHostTargetAsString; do
+          find "$p" -iname '*.dll' -exec ln -s {} $out/bin \;
+          find "$p" -iname '*.dll.a' -exec ln -s {} $out/bin \;
         done
       ''))
       + (lib.optionalString doCoverage ''
@@ -525,8 +570,14 @@ let
         fi
         rm -rf dist-tmp-dir
       ''
-    ) + (lib.optionalString (keepSource && haskellLib.isLibrary componentId) ''
-        remove-references-to -t $out ${name}.conf
+    ) + (
+      # Avoid circular refernces that crop up by removing references to $out
+      # from the current directory ($source).
+      # So far we have seen these in:
+      # * The `${name}.conf` of a library component.
+      # * The `hie` files for the Paths_ module (when building the stack exe).
+      lib.optionalString keepSource ''
+        find . -type f -exec remove-references-to -t $out '{}' +
     '') + (lib.optionalString (haskellLib.isTest componentId) ''
       echo The test ${package.identifier.name}.components.tests.${componentId.cname} was built.  To run the test build ${package.identifier.name}.checks.${componentId.cname}.
     '');

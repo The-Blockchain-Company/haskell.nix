@@ -1,4 +1,4 @@
-{ pkgs, buildPackages, stdenv, lib, haskellLib, ghc, compiler-nix-name, fetchurl, pkgconfig, nonReinstallablePkgs, hsPkgs, compiler }:
+{ pkgs, buildPackages, evalPackages, stdenv, lib, haskellLib, ghc, compiler-nix-name, fetchurl, pkgconfig, nonReinstallablePkgs, hsPkgs, compiler, inputMap }:
 
 let
   # Builds a single component of a package.
@@ -17,7 +17,7 @@ let
     # in the native case, it would be the same in the cross case however
     # we *really* want to build the Setup.hs on the build machine and not
     # have the stdenv confuse it with the target/host env.
-    inherit (buildPackages) stdenv pkgconfig;
+    inherit (buildPackages) stdenv;
     inherit buildPackages;
     inherit haskellLib nonReinstallablePkgs makeSetupConfigFiles;
   };
@@ -45,7 +45,8 @@ let
 
   hoogleLocal = let
     nixpkgsHoogle = import (pkgs.path + /pkgs/development/haskell-modules/hoogle.nix);
-  in { packages ? [], hoogle ? pkgs.buildPackages.haskell-nix.tool "ghc8104" "hoogle" {
+  in { packages ? [], hoogle ? pkgs.buildPackages.haskell-nix.tool "ghc8107" "hoogle" {
+        inherit evalPackages;
         version = "5.0.18.3";
         index-state = pkgs.haskell-nix.internalHackageIndexState;
       }
@@ -66,7 +67,7 @@ let
 
   # Same as haskellPackages.shellFor in nixpkgs.
   shellFor = haskellLib.weakCallPackage pkgs ./shell-for.nix {
-    inherit hsPkgs ghcForComponent makeConfigFiles hoogleLocal haskellLib buildPackages compiler;
+    inherit hsPkgs ghcForComponent makeConfigFiles hoogleLocal haskellLib buildPackages evalPackages compiler;
     inherit (buildPackages) glibcLocales;
   };
 
@@ -82,7 +83,7 @@ in {
   # Build a Haskell package from its config.
   # TODO: this pkgs is the adjusted pkgs, but pkgs.pkgs is unadjusted
   build-package = haskellLib.weakCallPackage pkgs ./hspkg-builder.nix {
-    inherit haskellLib ghc compiler-nix-name comp-builder setup-builder;
+    inherit haskellLib ghc compiler-nix-name comp-builder setup-builder inputMap;
   };
 
   inherit shellFor makeConfigFiles;

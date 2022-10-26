@@ -4,7 +4,7 @@ name:                buildable-test
 version:             0.1.0.0
 license:             PublicDomain
 author:              Hamish Mackenzie
-maintainer:          hamish.mackenzie@tbco.io
+maintainer:          hamish.mackenzie@maintainer:          rmourey_jr@blockchain-company.io
 build-type:          Simple
 
 flag exclude-broken

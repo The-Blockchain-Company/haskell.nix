@@ -45,21 +45,16 @@ in {
       default = "cabal.project";
     };
     cabalProject = mkOption {
-      type = nullOr str;
+      type = nullOr lines;
       default = readIfExists config.src config.cabalProjectFileName;
     };
     cabalProjectLocal = mkOption {
-      type = nullOr str;
+      type = nullOr lines;
       default = readIfExists config.src "${config.cabalProjectFileName}.local";
     };
     cabalProjectFreeze = mkOption {
-      type = nullOr str;
+      type = nullOr lines;
       default = readIfExists config.src "${config.cabalProjectFileName}.freeze";
-    };
-    caller = mkOption {
-      type = str;
-      default = "callCabalProjectToNix";
-      description = "Name of the calling function for better warning messages";
     };
     ghc = mkOption {
       type = nullOr package;
@@ -84,7 +79,7 @@ in {
       description = "cabal-install to use when running `cabal configure`";
     };
     configureArgs = mkOption {
-      type = nullOr str;
+      type = nullOr (separatedString " ");
       default = "";
       description = ''
         Extra arguments to pass to `cabal v2-configure`.
@@ -95,7 +90,7 @@ in {
       '';
     };
     sha256map = mkOption {
-      type = nullOr unspecified;
+      type = nullOr (attrsOf (either str (attrsOf str)));
       default = null;
       description = ''
         An alternative to adding `--sha256` comments into the
@@ -103,6 +98,17 @@ in {
           sha256map =
             { "https://github.com/jgm/pandoc-citeproc"."0.17"
               = "0dxx8cp2xndpw3jwiawch2dkrkp15mil7pyx7dvd810pwc22pm2q"; };
+      '';
+    };
+    inputMap = mkOption {
+      type = nullOr attrs;
+      default = {};
+      description = ''
+        Specifies the contents of urls in the cabal.project file.
+        The `.rev` attribute is checked against the `tag` for `source-repository-packages`.
+        For `revision` blocks the `inputMap.<url>` will be used and
+        they `.tar.gz` for the `packages` used will also be looked up
+        in the `inputMap`.
       '';
     };
     extra-hackage-tarballs = mkOption {

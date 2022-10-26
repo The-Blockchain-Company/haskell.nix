@@ -1,0 +1,1 @@
+add1	test.c	/^double add1(double x) {$/;"	f

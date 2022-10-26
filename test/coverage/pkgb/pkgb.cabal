@@ -9,7 +9,7 @@ version:             0.1.0.0
 -- bug-reports:
 license:             LicenseRef-PublicDomain
 author:              Rodney Lorrimar
-maintainer:          rodney.lorrimar@tbco.io
+maintainer:          rmourey_jr@blockchain-company.io
 category:            Testing
 
 library

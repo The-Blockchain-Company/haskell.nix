@@ -8,10 +8,10 @@ First it filters just the files needed to run `git index`, then
 it uses the results of that to filter your directory.  It does not
 need to parse the `.gitignore` files at all, but we do need to
 `git add` our files before they will be included.
-[cleanGit source](https://github.com/The-Blockchain-Company/haskell.nix/blob/master/lib/clean-git.nix).
+[cleanGit source](https://github.com/the-blockchain-company/haskell.nix/blob/master/lib/clean-git.nix).
 
 In addition haskell.nix (including `cleanGit`) uses a version
-of [`cleanSourceWith`](https://github.com/The-Blockchain-Company/haskell.nix/blob/master/lib/clean-source-with.nix)
+of [`cleanSourceWith`](https://github.com/the-blockchain-company/haskell.nix/blob/master/lib/clean-source-with.nix)
 with a `subdir` argument to filter out just the package it is
 building.  Then it uses the info from the `cabal` file to filter
 just the source dirs for the component it is building.  That way
@@ -26,11 +26,11 @@ are ways to fix this with a module:
 
 Use `extraSrcFiles` to add dirs the test needs (this will not result
 in a change to the `.cabal` file the test will still be built the same).
-```
+```nix
 components.tests.test.extraSrcFiles = [ "subdir-needed-by-test" ];
 ```
 Or alternatively, override the source with a suitable filter function.
-```
+```nix
 components.tests.test.src = haskell-nix.haskellLib.cleanSourceWith {
     inherit src;
     subdir = "path-to-package";
@@ -74,7 +74,7 @@ packages:
 
 Then in `repoA/default.nix` we can use:
 
-```
+```nix
 haskell-nix.project {
   src = haskell-nix.haskellLib.cleanSourceWith {
     src = haskell-nix.haskellLib.cleanGits {
